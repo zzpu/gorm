@@ -151,6 +151,11 @@ func getForeignField(column string, fields []*StructField) *StructField {
 }
 
 // GetModelStruct get value's model struct, relationships based on struct and tag definition
+/**
+ * 解析结构体
+ *
+ * return: *ModelStruct
+ */
 func (scope *Scope) GetModelStruct() *ModelStruct {
 	var modelStruct ModelStruct
 	// Scope value can't be nil
@@ -160,15 +165,18 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 
 	reflectType := reflect.ValueOf(scope.Value).Type()
 	for reflectType.Kind() == reflect.Slice || reflectType.Kind() == reflect.Ptr {
+		//如果是切片或指针类型，则返回元素的类型
 		reflectType = reflectType.Elem()
 	}
 
 	// Scope value need to be a struct
+	//非struct返回nil
 	if reflectType.Kind() != reflect.Struct {
 		return &modelStruct
 	}
 
 	// Get Cached model struct
+	//复数表名
 	isSingularTable := false
 	if scope.db != nil && scope.db.parent != nil {
 		scope.db.parent.RLock()
@@ -180,6 +188,7 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 		singularTable bool
 		reflectType   reflect.Type
 	}{isSingularTable, reflectType}
+	//modelStructsMap是协程安全map-->加快反射执行效率
 	if value, ok := modelStructsMap.Load(hashKey); ok && value != nil {
 		return value.(*ModelStruct)
 	}
@@ -188,13 +197,14 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 
 	// Get all fields
 	for i := 0; i < reflectType.NumField(); i++ {
+		//判断是否大写开头
 		if fieldStruct := reflectType.Field(i); ast.IsExported(fieldStruct.Name) {
 			field := &StructField{
-				Struct:      fieldStruct,
-				Name:        fieldStruct.Name,
-				Names:       []string{fieldStruct.Name},
-				Tag:         fieldStruct.Tag,
-				TagSettings: parseTagSetting(fieldStruct.Tag),
+				Struct:      fieldStruct,                      // a single field in a struct
+				Name:        fieldStruct.Name,                 // 域名
+				Names:       []string{fieldStruct.Name},       //
+				Tag:         fieldStruct.Tag,                  // 标签
+				TagSettings: parseTagSetting(fieldStruct.Tag), // 标签解析结果
 			}
 
 			// is ignored field
@@ -218,12 +228,13 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 				for indirectType.Kind() == reflect.Ptr {
 					indirectType = indirectType.Elem()
 				}
-
+				// 为什么要 new 一个呢
 				fieldValue := reflect.New(indirectType).Interface()
 				if _, isScanner := fieldValue.(sql.Scanner); isScanner {
 					// is scanner
 					field.IsScanner, field.IsNormal = true, true
 					if indirectType.Kind() == reflect.Struct {
+						//
 						for i := 0; i < indirectType.NumField(); i++ {
 							for key, value := range parseTagSetting(indirectType.Field(i).Tag) {
 								if _, ok := field.TagSettingsGet(key); !ok {
@@ -235,11 +246,14 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 				} else if _, isTime := fieldValue.(*time.Time); isTime {
 					// is time
 					field.IsNormal = true
+					//处理嵌入类型 和 匿名类型
 				} else if _, ok := field.TagSettingsGet("EMBEDDED"); ok || fieldStruct.Anonymous {
 					// is embedded struct
+					//解析内嵌类型
 					for _, subField := range scope.New(fieldValue).GetModelStruct().StructFields {
 						subField = subField.clone()
 						subField.Names = append([]string{fieldStruct.Name}, subField.Names...)
+						//嵌入前缀
 						if prefix, ok := field.TagSettingsGet("EMBEDDED_PREFIX"); ok {
 							subField.DBName = prefix + subField.DBName
 						}
@@ -265,6 +279,7 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 					continue
 				} else {
 					// build relationships
+					//
 					switch indirectType.Kind() {
 					case reflect.Slice:
 						defer func(field *StructField) {
@@ -628,18 +643,18 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 			} else {
 				field.DBName = ToColumnName(fieldStruct.Name)
 			}
-
+			//struct
 			modelStruct.StructFields = append(modelStruct.StructFields, field)
 		}
 	}
-
+	//
 	if len(modelStruct.PrimaryFields) == 0 {
 		if field := getForeignField("id", modelStruct.StructFields); field != nil {
 			field.IsPrimaryKey = true
 			modelStruct.PrimaryFields = append(modelStruct.PrimaryFields, field)
 		}
 	}
-
+	//缓存，以便提高反射效率
 	modelStructsMap.Store(hashKey, &modelStruct)
 
 	return &modelStruct

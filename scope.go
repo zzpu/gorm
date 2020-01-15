@@ -103,6 +103,7 @@ func (scope *Scope) SkipLeft() {
 }
 
 // Fields get value's fields
+//通过反射获取field的值
 func (scope *Scope) Fields() []*Field {
 	if scope.fields == nil {
 		var (
@@ -110,17 +111,21 @@ func (scope *Scope) Fields() []*Field {
 			indirectScopeValue = scope.IndirectValue()
 			isStruct           = indirectScopeValue.Kind() == reflect.Struct
 		)
-
+		// 解析结构体
 		for _, structField := range scope.GetModelStruct().StructFields {
 			if isStruct {
 				fieldValue := indirectScopeValue
+				// 一般只有一个字段名吧？？？？？
 				for _, name := range structField.Names {
 					if fieldValue.Kind() == reflect.Ptr && fieldValue.IsNil() {
+						// 处理数组
 						fieldValue.Set(reflect.New(fieldValue.Type().Elem()))
 					}
+					//
 					fieldValue = reflect.Indirect(fieldValue).FieldByName(name)
 				}
 				fields = append(fields, &Field{StructField: structField, Field: fieldValue, IsBlank: isBlank(fieldValue)})
+				//如果不是struct，则返回空，因为原生没有字段这个说法
 			} else {
 				fields = append(fields, &Field{StructField: structField, IsBlank: true})
 			}
@@ -856,6 +861,9 @@ func (scope *Scope) inlineCondition(values ...interface{}) *Scope {
 	return scope
 }
 
+/**
+ * 执行callback函数
+ */
 func (scope *Scope) callCallbacks(funcs []*func(s *Scope)) *Scope {
 	defer func() {
 		if err := recover(); err != nil {

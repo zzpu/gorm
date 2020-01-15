@@ -158,6 +158,9 @@ func getRIndex(strs []string, str string) int {
 }
 
 // sortProcessors sort callback processors based on its before, after, remove, replace
+/**
+ * 返回排序过的函数切片
+ */
 func sortProcessors(cps []*CallbackProcessor) []*func(scope *Scope) {
 	var (
 		allNames, sortedNames []string
@@ -166,6 +169,7 @@ func sortProcessors(cps []*CallbackProcessor) []*func(scope *Scope) {
 
 	for _, cp := range cps {
 		// show warning message the callback name already exists
+		//重复命名的打印告警
 		if index := getRIndex(allNames, cp.name); index > -1 && !cp.replace && !cp.remove {
 			cp.logger.Print("warning", fmt.Sprintf("[warning] duplicated callback `%v` from %v", cp.name, fileWithLineNum()))
 		}
@@ -177,6 +181,7 @@ func sortProcessors(cps []*CallbackProcessor) []*func(scope *Scope) {
 			if c.before != "" { // if defined before callback
 				if index := getRIndex(sortedNames, c.before); index != -1 {
 					// if before callback already sorted, append current callback just after it
+					//添加before类型函数的后面
 					sortedNames = append(sortedNames[:index], append([]string{c.name}, sortedNames[index:]...)...)
 				} else if index := getRIndex(allNames, c.before); index != -1 {
 					// if before callback exists but haven't sorted, append current callback to last

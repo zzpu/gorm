@@ -200,6 +200,7 @@ func (s *DB) SingularTable(enable bool) {
 }
 
 // NewScope create a scope for current operation
+// 范围
 func (s *DB) NewScope(value interface{}) *Scope {
 	dbClone := s.clone()
 	dbClone.Value = value

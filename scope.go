@@ -124,7 +124,10 @@ func (scope *Scope) Fields() []*Field {
 					//
 					fieldValue = reflect.Indirect(fieldValue).FieldByName(name)
 				}
-				fields = append(fields, &Field{StructField: structField, Field: fieldValue, IsBlank: isBlank(fieldValue)})
+
+				//有force代表强制更新
+				_, ok := structField.TagSettingsGet("FORCE")
+				fields = append(fields, &Field{StructField: structField, Field: fieldValue, IsBlank: isBlank(fieldValue) && !ok})
 				//如果不是struct，则返回空，因为原生没有字段这个说法
 			} else {
 				fields = append(fields, &Field{StructField: structField, IsBlank: true})
